@@ -1,5 +1,5 @@
 CC		=	g++
-CFLAGS	=
+CFLAGS	=	-DDEBUG
 TARGET	=	tb
 SRCS	=	tb.cpp
 OBJS	=	$(SRCS:.cpp=.o)
@@ -8,7 +8,8 @@ LIBDIR	=
 LIBS	=
 
 $(TARGET):	$(OBJS)
-	$(CC) -o $@ $^ $(LIBDIR) $(LIBS)
+#	$(CC) -o $@ $^ $(CFLAGS) $(LIBDIR) $(LIBS)
+	$(CC) -o $(TARGET) $(SRCS) $(CFLAGS) $(LIBDIR) $(LIBS)
 
 all: clean $(OBJS) $(TARGET)
 

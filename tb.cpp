@@ -15,19 +15,23 @@ bool isDelim(char inChar) {
 
 bool isWhite(char inChar) { return inChar == ' ' || inChar == '\t'; }
 
-void error(Error inErrorID) {
+void error(int line, Error inErrorID) {
   if (gErrDict.find(inErrorID) == gErrDict.end()) {
     fprintf(stderr, "SYSTEM ERROR (no such error ID).\n");
     exit(-2);
   }
+#ifdef DEBUG
+  printf("[%d] %s\n", line, gErrDict[inErrorID]);
+#else
   printf("%s\n", gErrDict[inErrorID]);
+#endif
   exit(-1);
 }
 
 void fpush(LoopInfo inLoopInfo) { gFStack.push_back(inLoopInfo); }
 LoopInfo fpop() {
   if (gFStack.size() == 0) {
-    error(MismatchNext);
+    error(__LINE__, MismatchNext);
   }
   LoopInfo loopInfo = gFStack.back();
   gFStack.pop_back();
@@ -37,7 +41,7 @@ LoopInfo fpop() {
 void gpush(char *inProgPos) { gGStack.push_back(inProgPos); }
 char *gpop() {
   if (gGStack.size() == 0) {
-    error(MismatchReturn);
+    error(__LINE__, MismatchReturn);
   }
   char *progPos = gGStack.back();
   gGStack.pop_back();
@@ -74,6 +78,12 @@ char *loadProgram(char *inFileName) {
   return bufTop;
 }
 
+void debugLog(int line, char *msg) {
+#ifdef DEBUG
+  printf("[%d] %s\n", line, msg);
+#endif
+}
+
 Type getToken() {
   gTokenType = Invalid;
   gTokVal = INVALID;
@@ -93,7 +103,7 @@ Type getToken() {
 
   if (gProgPos[0] == '\r' && gProgPos[1] == '\n') {
     // crlf
-    gProgPos++;
+    gProgPos += 2;
     gToken[0] = '\r';
     gToken[1] = '\n';
     gToken[2] = '\0';
@@ -112,7 +122,7 @@ Type getToken() {
     return gTokenType;
   }
 
-  if (strchr("+-*^/%=;(),>?", *gProgPos)) {
+  if (strchr("+-*^/%=;(),><", *gProgPos)) {
     *dest = *gProgPos;
     gProgPos++;
     *(++dest) = '\0';
@@ -127,7 +137,7 @@ Type getToken() {
       *dest++ = *gProgPos++;
     }
     if (*gProgPos == '\r') {
-      error(Parentheses);
+      error(__LINE__, Parentheses);
     }
     gProgPos++;
     *dest = '\0';
@@ -150,9 +160,7 @@ Type getToken() {
     while (isDelim(*gProgPos) == false) {
       *dest++ = *gProgPos++;
     }
-    *dest = '\0';
-    gTokenType = Number;
-    return gTokenType;
+    gTokenType = String;
   }
 
   *dest = '\0';
@@ -174,7 +182,7 @@ void putBack() {
 
 int findVar(char *inToken) {
   if (isalpha(*inToken) == 0) {
-    error(NotAVariable);
+    error(__LINE__, NotAVariable);
   }
   return gVariables[toupper(*gToken) - 'A'];
 }
@@ -191,7 +199,7 @@ int primitive() {
     getToken();
     break;
   default:
-    error(SyntaxError);
+    error(__LINE__, SyntaxError);
   }
   return ret;
 }
@@ -228,7 +236,7 @@ void level6(int *outResult) {
     getToken();
     level2(outResult);
     if (*gToken != ')') {
-      error(Parentheses);
+      error(__LINE__, Parentheses);
     }
     getToken();
   } else {
@@ -283,7 +291,7 @@ void level2(int *outResult) {
 int getExp() {
   getToken();
   if (*gToken == '\0') {
-    error(NoExp);
+    error(__LINE__, NoExp);
   }
   int result;
   level2(&result);
@@ -294,12 +302,12 @@ int getExp() {
 void assignment() {
   getToken();
   if (isalpha(*gToken) == 0) {
-    error(NotAVariable);
+    error(__LINE__, NotAVariable);
   }
   int var = toupper(*gToken) - 'A';
   getToken();
   if (*gToken != '=') {
-    error(NoEqualSign);
+    error(__LINE__, NoEqualSign);
   }
   gVariables[var] = getExp();
 }
@@ -324,7 +332,7 @@ void scanLabels() {
     getToken();
     if (gTokenType == Number) {
       if (isUniqueLabel(gToken) == false) {
-        error(DupLabel);
+        error(__LINE__, DupLabel);
       }
       gLabelTable[gToken] = gProgPos;
     }
@@ -366,7 +374,7 @@ void execPrint() {
       // 何もしない
     } else if (gTokVal != EOL && gTokVal != FINISHED) {
       // そんなわけはない
-      error(SyntaxError);
+      error(__LINE__, SyntaxError);
     }
   } while (*gToken == ';' || *gToken == ',');
   if (gTokVal == EOL || gTokVal == FINISHED) {
@@ -374,7 +382,7 @@ void execPrint() {
       printf("\n");
     }
   } else {
-    error(SyntaxError);
+    error(__LINE__, SyntaxError);
   }
 }
 
@@ -385,7 +393,7 @@ void execInput() {
     printf("%s", gToken);
     getToken();
     if (*gToken != ',') {
-      error(Parentheses);
+      error(__LINE__, Parentheses);
     }
     getToken();
   } else {
@@ -402,7 +410,7 @@ void execGoto() {
   getToken();
   char *pos = findLabel(gToken);
   if (pos == NULL) {
-    error(NoSuchALabel);
+    error(__LINE__, NoSuchALabel);
   }
   gProgPos = pos;
 }
@@ -411,7 +419,7 @@ void execGoSub() {
   getToken();
   char *pos = findLabel(gToken);
   if (pos == NULL) {
-    error(NoSuchALabel);
+    error(__LINE__, NoSuchALabel);
   }
   gpush(gProgPos);
   gProgPos = pos;
@@ -423,7 +431,7 @@ void execIf() {
   int x = getExp(); // 左辺の文を取得
   getToken();       // オペレータを取得
   if (strchr("=<>", *gToken) == 0) {
-    error(SyntaxError);
+    error(__LINE__, SyntaxError);
   }
   char op = *gToken;
   int y = getExp();
@@ -443,7 +451,7 @@ void execIf() {
     // trueの時
     getToken();
     if (gTokVal != THEN) {
-      error(NoThen);
+      error(__LINE__, NoThen);
     }
     // elseは次の行に書いてある
   } else {
@@ -454,19 +462,19 @@ void execIf() {
 void execFor() {
   getToken(); // コントロール変数を読む
   if (isalpha(*gToken) == 0) {
-    error(NotAVariable);
+    error(__LINE__, NotAVariable);
   }
   LoopInfo loopInfo;
   loopInfo.counterVarID = toupper(*gToken) - 'A';
   getToken(); // イコールのサインを読む
   if (*gToken != '=') {
-    error(NoEqualSign);
+    error(__LINE__, NoEqualSign);
   }
   int value = getExp();
   gVariables[loopInfo.counterVarID] = value; // 初期値を読み込む
   getToken();
   if (gTokVal != TO) {
-    error(NoTo);
+    error(__LINE__, NoTo);
   }
   loopInfo.targetValue = getExp(); // ターゲットの値を読む
   if (value >= gVariables[loopInfo.counterVarID]) {
